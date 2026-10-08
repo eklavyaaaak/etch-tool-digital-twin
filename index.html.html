@@ -1,0 +1,619 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Etch Tool Digital Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: instrument console. 3D chamber on the left, live readings and controls on the right, analysis tabs below. */
+:root{
+  --bg:#0b1013; --panel:#121a1f; --panel2:#18232a; --line:#25343b;
+  --fg:#dbe7eb; --dim:#8097a0; --accent:#63d4e4; --plasma:#a98bff;
+  --ok:#5fd38a; --warn:#f2b84b; --crit:#ff6161;
+  --display:'Barlow Condensed','Arial Narrow',sans-serif;
+  --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:18px 40px}
+.app{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+h1{font-family:var(--display);font-weight:700;font-size:2.1rem;letter-spacing:.04em;text-transform:uppercase;margin:0;line-height:1}
+.sub{color:var(--dim);font-size:.85rem;margin-top:6px}
+.topr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--line);background:var(--panel);text-transform:uppercase}
+.badge b{font-weight:600}
+.btn{background:var(--panel2);border:1px solid var(--line);padding:8px 14px;cursor:pointer;font-weight:500;font-size:.88rem;transition:border-color .15s,background .15s}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#04181c;border-color:var(--accent);font-weight:600}
+.btn.primary:hover:not(:disabled){background:#86e2ee}
+.btn.danger.on{background:rgba(255,97,97,.16);border-color:var(--crit);color:var(--crit)}
+.grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);padding:14px;min-width:0}
+.label{font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+h2{font-family:var(--display);font-size:1.15rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:0}
+.view-wrap{position:relative;height:clamp(300px,46vw,470px);background:#0f161a;border:1px solid var(--line);overflow:hidden}
+#view{position:absolute;inset:0;touch-action:none;cursor:grab}
+#view:active{cursor:grabbing}
+#view canvas{display:block;width:100%;height:100%}
+.hint{position:absolute;left:10px;bottom:8px;font-family:var(--mono);font-size:.68rem;color:var(--dim);pointer-events:none}
+.nogl{padding:24px;color:var(--dim)}
+.parts{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.part{background:transparent;border:1px solid var(--line);padding:5px 10px;font-size:.82rem;cursor:pointer;color:var(--dim)}
+.part[aria-pressed=true]{border-color:var(--accent);color:var(--fg);background:rgba(99,212,228,.1)}
+.part .d{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--ok)}
+.part .d.warn{background:var(--warn)}.part .d.crit{background:var(--crit)}
+.info{display:grid;gap:6px}
+.info h3{font-family:var(--display);font-size:1.3rem;margin:0;font-weight:600;letter-spacing:.03em}
+.info p{margin:0;color:var(--dim);font-size:.9rem;max-width:68ch}
+.info .sig{font-family:var(--mono);font-size:.85rem;color:var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--panel2);border:1px solid var(--line);padding:10px 12px;display:grid;gap:4px;min-width:0}
+.tile .v{font-family:var(--mono);font-size:1.35rem;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v small{font-size:.7rem;color:var(--dim);margin-left:4px;font-weight:400}
+.tile .s{font-size:.75rem;color:var(--dim);font-family:var(--mono);font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}
+.dot.warn{background:var(--warn)}.dot.crit{background:var(--crit)}
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.note{margin-top:10px;min-height:1.4em;font-size:.85rem;color:var(--warn);font-family:var(--mono)}
+.tabs{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);gap:4px}
+.tab{background:none;border:1px solid transparent;border-bottom:none;padding:10px 16px;cursor:pointer;color:var(--dim);font-family:var(--display);font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+.tab[aria-selected=true]{color:var(--fg);background:var(--panel);border-color:var(--line);margin-bottom:-1px;border-bottom:1px solid var(--panel)}
+.tab .n{font-family:var(--mono);font-size:.72rem;background:var(--crit);color:#1a0505;padding:1px 6px;margin-left:6px;border-radius:9px}
+.pane{background:var(--panel);border:1px solid var(--line);border-top:none;padding:16px;min-width:0}
+.metrics{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+canvas.ch{width:100%;height:250px;display:block}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:.75rem;color:var(--dim);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:3px;margin-right:6px;vertical-align:middle}
+.spcstats{display:flex;flex-wrap:wrap;gap:8px 28px;margin-bottom:10px;font-family:var(--mono);font-size:.85rem}
+.spcstats b{font-weight:600;color:var(--accent)}
+.tickets{display:grid;gap:10px}
+.tk{border:1px solid var(--line);background:var(--panel2);padding:12px 14px;display:grid;gap:4px}
+.tk.closed{opacity:.55}
+.tk .h{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.pill{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border:1px solid}
+.pill.crit{color:var(--crit);border-color:var(--crit)}.pill.warn{color:var(--warn);border-color:var(--warn)}.pill.ok{color:var(--ok);border-color:var(--ok)}
+.tk b.t{font-weight:600}
+.tk p{margin:0;font-size:.88rem;color:var(--dim);max-width:80ch}
+.tk p span{color:var(--fg)}
+.empty{color:var(--dim);padding:16px 0}
+.pmgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px}
+@media(max-width:900px){.pmgrid{grid-template-columns:minmax(0,1fr)}}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.step{border:1px solid var(--line);background:var(--panel2);padding:10px 12px;display:grid;gap:6px}
+.step.locked{opacity:.45}
+.step.done{border-color:rgba(95,211,138,.5)}
+.step .hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.step .no{font-family:var(--mono);font-size:.78rem;color:var(--dim)}
+.step.done .no{color:var(--ok)}
+.step .tt{font-weight:600}
+.step p{margin:0;font-size:.85rem;color:var(--dim)}
+.step label{font-size:.85rem;display:flex;gap:8px;align-items:flex-start}
+.step .wait{font-family:var(--mono);font-size:.76rem;color:var(--warn)}
+.audit{font-family:var(--mono);font-size:.76rem;display:grid;gap:4px;max-height:420px;overflow:auto;padding-right:6px;align-content:start}
+.audit div{display:grid;grid-template-columns:auto 1fr;gap:10px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.audit time{color:var(--dim)}
+.foot{color:var(--dim);font-size:.8rem;max-width:90ch}
+</style>
+
+<main class="app">
+  <header class="top">
+    <div>
+      <h1>Etch Tool Digital Twin</h1>
+      <div class="sub">Tool ET-04 · generic ICP plasma etch chamber · simulated signals, not real tool data</div>
+    </div>
+    <div class="topr">
+      <div class="badge" id="state">State <b>IDLE</b></div>
+      <button class="btn" id="pause" type="button">Pause</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card" aria-label="3D chamber">
+      <div class="view-wrap"><div id="view"></div><div class="hint">Drag to rotate · scroll to zoom · click a part</div></div>
+      <div class="parts" id="parts" role="group" aria-label="Select a part"></div>
+      <div class="info" id="info"></div>
+    </section>
+
+    <div class="side">
+      <section class="card" aria-label="Live readings">
+        <h2>Live readings</h2>
+        <div class="tiles" id="tiles" style="margin-top:12px"></div>
+      </section>
+      <section class="card" aria-label="Tool controls">
+        <h2>Tool controls</h2>
+        <div class="ctl">
+          <button class="btn" id="bPump" type="button">Pump down</button>
+          <button class="btn primary" id="bStart" type="button">Start process</button>
+          <button class="btn" id="bStop" type="button">Stop process</button>
+          <button class="btn" id="bLeak" type="button">Leak rise test</button>
+          <button class="btn" id="bVent" type="button">Vent</button>
+        </div>
+        <div class="label" style="margin-top:16px">Inject a fault to test detection</div>
+        <div class="ctl" style="margin-top:8px">
+          <button class="btn danger" data-fault="leak" type="button">Vacuum leak</button>
+          <button class="btn danger" data-fault="mfc" type="button">MFC drift</button>
+          <button class="btn danger" data-fault="rf" type="button">RF mismatch</button>
+          <button class="btn danger" data-fault="valve" type="button">Stuck throttle valve</button>
+        </div>
+        <div class="ctl"><button class="btn" id="bRepair" type="button">Engineer repair (clear all faults)</button></div>
+        <div class="note" id="note" role="status"></div>
+      </section>
+    </div>
+  </div>
+
+  <section aria-label="Analysis">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" aria-selected="true" data-tab="trends" type="button">Trends</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="spc" type="button">SPC</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="alerts" type="button">Alerts<span class="n" id="alertN" hidden>0</span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="pm" type="button">PM mode</button>
+    </div>
+    <div class="pane" id="pane"></div>
+  </section>
+
+  <p class="foot">Built as a portfolio project. The chamber geometry is generic and the physics is simplified: pump-down is exponential decay toward base pressure, a leak adds a constant inflow, and process pressure is set by gas flow against throttle valve conductance. The tool detects and escalates faults. It never repairs them itself.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(s,r){return (r||document).querySelector(s)};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+var C={accent:'#63d4e4',plasma:'#a98bff',ok:'#5fd38a',warn:'#f2b84b',crit:'#ff6161',dim:'#8097a0',line:'#25343b',fg:'#dbe7eb'};
+var PSP=20,FSP=50,RFSP=600,K=0.15,PB=5,LEAK0=0.03,LEAKF=12,USL=22,LSL=18,SIG=0.4,CL=20;
+function randn(){var u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x));}
+function pad(n,w){n=String(n);while(n.length<w)n='0'+n;return n;}
+
+var S={mode:'IDLE',modeT:0,P:760000,Pm:760000,Fa:0,Frep:0,RFf:0,mm:0.02,T:25,v:0.5,stuck:false,drift:0,leak:LEAK0,
+  faults:{leak:false,mfc:false,rf:false,valve:false},procT:0,t:0,hist:[],spc:[],alerts:[],log:[],tk:0,running:true,
+  lastLeak:null,lt:null,pm:{active:false,step:0,chk:{},start:0,done:false},c:{pdev:0,mfc:0,rf:0,pump:0},vh:[],ver:0,note:''};
+
+/* ---------- audit + alerts ---------- */
+function logEvent(text){S.log.unshift({time:new Date().toLocaleTimeString('en-GB'),text:text});if(S.log.length>200)S.log.pop();S.ver++;}
+var ALERTS={
+  LEAK_FAIL:{sev:'crit',part:'chamber',title:'Leak rate above limit',cause:'Door seal, viewport or fitting leak.',action:'Hold the tool down. Schedule PM and replace the door seal, then repeat the leak rise test.'},
+  PUMP_STALL:{sev:'crit',part:'chamber',title:'Pressure stuck above 50 mTorr (pump-down stalled or base pressure lost)',cause:'Air leak into the chamber, or weak dry pump.',action:'Run a leak rise test to separate a leak from a pump problem. Escalate to the equipment engineer.'},
+  PRESS_LIMIT:{sev:'crit',part:'chamber',title:'Pressure out of control, throttle valve at open limit',cause:'Air inflow (leak) or flow far above setpoint. The valve is already fully open.',action:'Stop the process. Run a leak rise test. Escalate to the equipment engineer.'},
+  VALVE_STUCK:{sev:'crit',part:'valve',title:'Throttle valve not responding',cause:'Pressure is off setpoint while the valve position has not moved.',action:'Stop the process. Do not force the valve. Escalate for valve and controller inspection.'},
+  MFC_DRIFT:{sev:'warn',part:'gas',title:'Mass flow controller reading drifting',cause:'MFC zero or span drift. The pressure loop is hiding it by closing the valve.',action:'Finish the current lot only if the SPC chart is in control. Escalate for MFC verification and recalibration.'},
+  RF_REFLECT:{sev:'crit',part:'rf',title:'High RF reflected power',cause:'Match network out of tune, or a bad RF cable or connector.',action:'Stop the process. Escalate to the equipment engineer to inspect the match network and cable.'},
+  RF_TRIP:{sev:'crit',part:'rf',title:'RF interlock tripped (reflected power above 25%)',cause:'Severe RF mismatch.',action:'The tool moved itself to a safe state with RF off. No repair was attempted. Escalate now.'},
+  SPC:{sev:'warn',part:'chamber',title:'SPC rule violation on chamber pressure',cause:'Process shift or trend.',action:'Check the active alerts and recent PM history, then escalate to the process engineer.'}
+};
+function raise(code,extra){
+  for(var i=0;i<S.alerts.length;i++){if(S.alerts[i].code===code&&S.alerts[i].open)return;}
+  var d=ALERTS[code];S.tk++;
+  var a={id:'TKT-'+pad(S.tk,4),code:code,sev:d.sev,part:d.part,title:d.title,cause:d.cause,action:d.action,detail:extra||'',time:new Date().toLocaleTimeString('en-GB'),open:true,closed:null};
+  S.alerts.unshift(a);logEvent('ALERT '+a.id+' '+d.title+' (escalated, no auto-repair)');S.ver++;
+}
+function openAlerts(){return S.alerts.filter(function(a){return a.open;});}
+function partSeverity(p){var s=null;openAlerts().forEach(function(a){if(a.part===p){if(a.sev==='crit')s='crit';else if(!s)s='warn';}});return s;}
+
+/* ---------- modes + actions ---------- */
+function setMode(m){S.mode=m;S.modeT=0;}
+function lockout(){return S.pm.active&&!S.pm.done;}
+function note(t){S.note=t;S.ver++;}
+function act(name){
+  var m=S.mode;
+  if(name==='pump'){ if(m!=='IDLE')return note('Pump down needs a vented chamber (state IDLE).'); setMode('PUMPDOWN');logEvent('Pump down started');note('');}
+  if(name==='start'){
+    if(lockout())return note('Interlock: tool is locked out for PM.');
+    if(m!=='BASE'||S.P>=50)return note('Interlock: chamber must be below 50 mTorr. Pump down first.');
+    setMode('PROCESS');S.procT=0;S.spc=[];S.c={pdev:0,mfc:0,rf:0,pump:0};logEvent('Process started: '+FSP+' sccm, '+RFSP+' W, '+PSP+' mTorr setpoint');note('');
+  }
+  if(name==='stop'){ if(m!=='PROCESS')return; setMode('BASE');logEvent('Process stopped by operator');note('');}
+  if(name==='vent'){ if(m==='PROCESS'||m==='LEAKTEST'||m==='VENT'||m==='IDLE')return note('Vent is only allowed from pump-down or base state.'); setMode('VENT');logEvent('Vent started (N2)');note('');}
+  if(name==='leak'){
+    if(!((m==='BASE'||m==='PUMPDOWN')&&S.P<500))return note('Leak rise test needs the chamber below 500 mTorr.');
+    S.lt={n:0,p0:S.P};setMode('LEAKTEST');logEvent('Leak rise test started (60 s, chamber isolated)');note('');
+  }
+  S.ver++;
+}
+function finishLeak(){
+  var rate=(S.P-S.lt.p0)/S.lt.n*60,pass=rate<5;
+  S.lastLeak={rate:rate,pass:pass,t:S.t};
+  logEvent('Leak rise test '+(pass?'PASS':'FAIL')+': '+rate.toFixed(1)+' mTorr/min (limit 5)');
+  if(!pass)raise('LEAK_FAIL','Measured '+rate.toFixed(0)+' mTorr/min, limit 5 mTorr/min.');
+  setMode(S.P<50?'BASE':'PUMPDOWN');
+}
+function inject(f){
+  S.faults[f]=!S.faults[f];
+  if(f==='valve'){S.stuck=S.faults.valve;S.v=S.stuck?0.2:0.5;}
+  if(f==='mfc'&&!S.faults.mfc)S.drift=0;
+  if(f==='rf'&&!S.faults.rf)S.mm=0.02;
+  logEvent('Fault '+(S.faults[f]?'injected':'removed')+': '+f);S.ver++;
+}
+function repair(){
+  S.faults={leak:false,mfc:false,rf:false,valve:false};S.stuck=false;S.v=0.5;S.drift=0;S.mm=0.02;
+  var t=new Date().toLocaleTimeString('en-GB'),n=0;
+  S.alerts.forEach(function(a){if(a.open){a.open=false;a.closed=t;n++;}});
+  S.c={pdev:0,mfc:0,rf:0,pump:0};
+  logEvent('Engineer repair: faults cleared, '+n+' ticket(s) resolved');S.ver++;
+}
+
+/* ---------- simulation ---------- */
+function step(){
+  S.t++;S.modeT++;
+  var m=S.mode,run=(m==='PROCESS');
+  S.leak=S.faults.leak?LEAKF:LEAK0;
+  if(m==='IDLE'){S.P=760000+randn()*300;}
+  else if(m==='VENT'){S.P+=(760000-S.P)*0.25;if(S.P>755000){S.P=760000;setMode('IDLE');logEvent('Chamber vented to atmosphere');}}
+  else if(m==='PUMPDOWN'||m==='BASE'){S.P+=-K*(S.P-PB)+S.leak;if(S.P<PB)S.P=PB;if(m==='PUMPDOWN'&&S.P<50){setMode('BASE');logEvent('Base pressure reached: '+S.P.toFixed(1)+' mTorr');}}
+  else if(m==='LEAKTEST'){S.P+=S.leak*(0.9+0.2*Math.random());S.lt.n++;if(S.lt.n>=60)finishLeak();}
+  // gas and RF
+  var Ft=run?FSP*(1+S.drift):0;S.Fa+=(Ft-S.Fa)*0.4;
+  S.RFf+=((run?RFSP:0)-S.RFf)*0.4;
+  if(run){
+    S.procT++;
+    if(S.faults.mfc)S.drift=Math.min(0.2,S.drift+0.006);
+    if(S.faults.rf)S.mm=Math.min(0.4,S.mm+0.015);
+    var Peq=PB+15*(S.Fa/FSP)*(0.5/S.v)+S.leak*(0.5/S.v)/K;
+    S.P+=(Peq-S.P)*0.4;
+    if(S.procT>=6&&!S.stuck){var e=(S.P-PSP)/PSP;S.v=clamp(S.v+clamp(0.12*e,-0.03,0.03),0.05,1);}
+  }
+  var f=S.RFf/RFSP,Tt=25+35*f+60*f*S.mm;S.T+=(Tt-S.T)*0.04;
+  // readings
+  var nP=S.P<200?0.35:S.P*0.004;S.Pm=Math.max(0.1,S.P+randn()*nP);
+  S.Frep=run?S.Fa*(1+0.4*S.drift)/(1+S.drift)+randn()*0.3:S.Fa;
+  S.hist.push({P:S.Pm,F:S.Frep,Rf:S.RFf,Rr:S.RFf*S.mm,T:S.T,v:S.v*100});if(S.hist.length>180)S.hist.shift();
+  S.vh.push(S.v);if(S.vh.length>5)S.vh.shift();
+  evaluate();
+}
+function evaluate(){
+  var m=S.mode;
+  if(m==='PUMPDOWN'){ if(S.modeT>90&&S.P>50)raise('PUMP_STALL','Pressure is '+S.P.toFixed(0)+' mTorr after '+S.modeT+' s.'); }
+  if(m==='BASE'){ S.c.pump=S.P>60?S.c.pump+1:0; if(S.c.pump>=5)raise('PUMP_STALL','Base pressure rose to '+S.P.toFixed(0)+' mTorr (limit 50).'); }
+  if(m!=='PROCESS'||S.procT<=25)return;
+  var dev=Math.abs(S.Pm-PSP)/PSP;
+  S.c.pdev=dev>0.1?S.c.pdev+1:0;
+  if(S.c.pdev>=5){
+    var mv=Math.max.apply(null,S.vh)-Math.min.apply(null,S.vh);
+    if(S.v>=0.95)raise('PRESS_LIMIT','Pressure '+S.Pm.toFixed(1)+' mTorr vs setpoint '+PSP+'.');
+    else if(mv<0.002)raise('VALVE_STUCK','Pressure '+S.Pm.toFixed(1)+' mTorr vs setpoint '+PSP+'. Valve fixed at '+(S.v*100).toFixed(0)+'%.');
+  }
+  S.c.mfc=Math.abs(S.Frep-FSP)/FSP>0.05?S.c.mfc+1:0;
+  if(S.c.mfc>=3)raise('MFC_DRIFT','Reading '+S.Frep.toFixed(1)+' sccm vs setpoint '+FSP+'.');
+  var ratio=S.RFf>50?S.mm:0;
+  S.c.rf=ratio>0.10?S.c.rf+1:0;
+  if(S.c.rf>=3)raise('RF_REFLECT','Reflected '+(S.RFf*S.mm).toFixed(0)+' W of '+S.RFf.toFixed(0)+' W ('+(ratio*100).toFixed(0)+'%).');
+  if(ratio>0.25){raise('RF_TRIP','Reflected power '+(ratio*100).toFixed(0)+'%.');setMode('BASE');logEvent('Interlock: RF off, process aborted to safe state');}
+  if(S.procT>35){S.spc.push(S.Pm);if(S.spc.length>60)S.spc.shift();spcRules();}
+}
+function spcRules(){
+  var d=S.spc,n=d.length,bad=false;
+  if(Math.abs(d[n-1]-CL)>3*SIG)bad=true;
+  if(n>=8){var up=true,dn=true;for(var i=n-8;i<n;i++){if(d[i]<=CL+0.5*SIG)up=false;if(d[i]>=CL-0.5*SIG)dn=false;}if(up||dn)bad=true;}
+  if(bad&&S.c.pdev===0&&!openAlerts().some(function(a){return a.code!=='SPC';}))raise('SPC','Latest point '+d[n-1].toFixed(2)+' mTorr, centre line '+CL+' mTorr, limits ±'+(3*SIG).toFixed(1)+'.');
+}
+function cpk(){
+  var d=S.spc.slice(-40);if(d.length<10)return null;
+  var mu=0,i;for(i=0;i<d.length;i++)mu+=d[i];mu/=d.length;
+  var v=0;for(i=0;i<d.length;i++)v+=(d[i]-mu)*(d[i]-mu);var s=Math.sqrt(v/(d.length-1));
+  return {mu:mu,s:s,cpk:Math.min(USL-mu,mu-LSL)/(3*s)};
+}
+
+/* ---------- formatting ---------- */
+function fmtP(p){return p>=1000?{v:(p/1000).toFixed(p>=100000?0:1),u:'Torr'}:{v:p.toFixed(p<100?1:0),u:'mTorr'};}
+
+/* ---------- parts ---------- */
+var PARTS={
+  chamber:{name:'Process chamber',role:'Sealed vessel where the plasma etches the wafer. The door seal and fittings must hold vacuum.',watch:'Leak rate, base pressure, process pressure.',sig:function(){var p=fmtP(S.Pm);return 'Pressure '+p.v+' '+p.u;}},
+  stage:{name:'Wafer chuck',role:'Holds and cools the wafer. Temperature drifts up with RF power, especially when reflected power is high.',watch:'Chuck temperature.',sig:function(){return 'Chuck '+S.T.toFixed(1)+' °C';}},
+  rf:{name:'RF generator and match network',role:'Delivers RF power to light the plasma. The match network tunes the load so little power is reflected.',watch:'Reflected power as a share of forward power (alarm above 10%, interlock above 25%).',sig:function(){return 'Forward '+S.RFf.toFixed(0)+' W · reflected '+(S.RFf*S.mm).toFixed(0)+' W';}},
+  gas:{name:'Gas box and MFC',role:'The mass flow controller meters process gas into the chamber.',watch:'Flow reading against setpoint.',sig:function(){return 'Flow '+S.Frep.toFixed(1)+' sccm (setpoint '+FSP+')';}},
+  valve:{name:'Throttle valve',role:'Sets pumping speed. The pressure controller moves it to hold the pressure setpoint.',watch:'Position and whether it moves when pressure is off setpoint.',sig:function(){return 'Position '+(S.v*100).toFixed(1)+'%'+(S.stuck?' (stuck)':'');}},
+  pump:{name:'Dry vacuum pump',role:'Rough and backing pump. Sets how fast the chamber pumps down and how low base pressure goes.',watch:'Pump-down time and base pressure.',sig:function(){return 'Base pressure target '+PB+' mTorr';}}
+};
+var selected='chamber';
+
+/* ---------- 3D ---------- */
+var R={ok:false,meshes:{}};
+function init3D(){
+  var wrap=$('#view');
+  if(!window.THREE){wrap.innerHTML='<p class="nogl">The 3D library could not load. The simulation below still runs.</p>';return;}
+  var renderer;
+  try{renderer=new THREE.WebGLRenderer({antialias:true});}catch(e){wrap.innerHTML='<p class="nogl">3D view needs WebGL, which is not available here. The simulation below still runs.</p>';return;}
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setClearColor(0x0f161a,1);
+  wrap.appendChild(renderer.domElement);
+  var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(38,1,0.1,100);
+  scene.add(new THREE.AmbientLight(0xaabbc4,0.55));
+  var d1=new THREE.DirectionalLight(0xffffff,0.9);d1.position.set(5,8,6);scene.add(d1);
+  var d2=new THREE.DirectionalLight(0x7fa6ff,0.4);d2.position.set(-6,3,-4);scene.add(d2);
+  var metal=function(c){return new THREE.MeshStandardMaterial({color:c,metalness:0.6,roughness:0.4,emissive:0x000000});};
+  var groups={};
+  function grp(id,x,y,z){var g=new THREE.Group();g.position.set(x,y,z);g.userData.part=id;scene.add(g);groups[id]=g;R.meshes[id]=[];return g;}
+  function add(id,geo,mat,x,y,z,rx,rz,noPick){var me=new THREE.Mesh(geo,mat);me.position.set(x||0,y||0,z||0);if(rx)me.rotation.x=rx;if(rz)me.rotation.z=rz;if(noPick)me.raycast=function(){};groups[id].add(me);R.meshes[id].push(me);return me;}
+  // floor
+  var grid=new THREE.GridHelper(12,24,0x25343b,0x1a272d);grid.position.y=0;scene.add(grid);
+  // chamber
+  grp('chamber',0,1.6,0);
+  var glass=new THREE.MeshStandardMaterial({color:0x9fd0dc,transparent:true,opacity:0.2,side:THREE.DoubleSide,depthWrite:false,metalness:0.1,roughness:0.1,emissive:0x000000});
+  add('chamber',new THREE.CylinderGeometry(1.2,1.2,1.1,48,1,true),glass,0,0,0,0,0,true);
+  add('chamber',new THREE.CylinderGeometry(1.3,1.3,0.2,48),metal(0x8fa3ad),0,0.65,0);
+  add('chamber',new THREE.TorusGeometry(1.22,0.07,12,48),metal(0xb0c0c8),0,0.55,0,Math.PI/2);
+  add('chamber',new THREE.TorusGeometry(1.22,0.07,12,48),metal(0xb0c0c8),0,-0.55,0,Math.PI/2);
+  add('chamber',new THREE.CylinderGeometry(1.0,1.2,0.45,48),metal(0x6f838d),0,-0.8,0);
+  for(var bi=0;bi<12;bi++){var ba=bi/12*Math.PI*2;add('chamber',new THREE.CylinderGeometry(0.05,0.05,0.07,8),metal(0xd5dde1),Math.cos(ba)*1.12,0.77,Math.sin(ba)*1.12);}
+  add('chamber',new THREE.BoxGeometry(0.95,0.62,0.1),metal(0x7f929b),0,0,1.24);
+  add('chamber',new THREE.CylinderGeometry(0.2,0.2,0.04,24),new THREE.MeshStandardMaterial({color:0x9fd0dc,transparent:true,opacity:0.5,emissive:0x000000}),0,0,1.31,Math.PI/2);
+  var plasma=add('chamber',new THREE.CylinderGeometry(0.95,0.95,0.5,40),new THREE.MeshBasicMaterial({color:0xa98bff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}),0,0.05,0,0,0,true);
+  R.meshes.chamber.pop();R.plasma=plasma;
+  // chuck
+  grp('stage',0,1.6,0);
+  add('stage',new THREE.CylinderGeometry(0.72,0.72,0.14,40),metal(0x5b6e78),0,-0.35,0);
+  add('stage',new THREE.CylinderGeometry(0.5,0.5,0.03,40),new THREE.MeshStandardMaterial({color:0x2d4263,metalness:0.9,roughness:0.15,emissive:0x000000}),0,-0.26,0);
+  // RF
+  grp('rf',0,0,0);
+  add('rf',new THREE.BoxGeometry(1.1,0.55,1.1),metal(0x3d6f8a),0,2.78,0);
+  add('rf',new THREE.BoxGeometry(1.4,0.9,1.2),metal(0x2f5b73),2.9,2.7,0);
+  add('rf',new THREE.CylinderGeometry(0.07,0.07,1.25,12),metal(0xc9a24a),1.55,2.75,0,0,Math.PI/2);
+  // gas box
+  grp('gas',0,0,0);
+  add('gas',new THREE.BoxGeometry(1.3,1.7,1.1),metal(0x4a6a52),-3.1,0.95,0);
+  add('gas',new THREE.CylinderGeometry(0.22,0.22,0.5,20),metal(0xd0d8dc),-3.1,2.0,0);
+  add('gas',new THREE.CylinderGeometry(0.16,0.16,0.4,16),metal(0xd0d8dc),-3.45,1.95,0.3);
+  add('gas',new THREE.CylinderGeometry(0.16,0.16,0.4,16),metal(0xd0d8dc),-2.75,1.95,0.3);
+  add('gas',new THREE.CylinderGeometry(0.06,0.06,1.65,12),metal(0xb7c3c9),-1.95,1.6,0,0,Math.PI/2);
+  // valve + foreline
+  grp('valve',0,0,0);
+  add('valve',new THREE.CylinderGeometry(0.34,0.34,0.32,28),metal(0x9a6b3a),0,0.72,0);
+  add('valve',new THREE.BoxGeometry(0.7,0.18,0.28),metal(0xb78445),0,0.72,0);
+  add('valve',new THREE.CylinderGeometry(0.14,0.14,0.45,16),metal(0xb7c3c9),0,1.0,0);
+  // pump
+  grp('pump',0,0,0);
+  add('pump',new THREE.BoxGeometry(1.5,1.1,1.5),metal(0x56606a),3.2,0.6,0);
+  add('pump',new THREE.CylinderGeometry(0.4,0.4,0.5,24),metal(0x7d8a94),3.2,1.4,0);
+  for(var fi=0;fi<5;fi++)add('pump',new THREE.BoxGeometry(1.6,0.05,1.6),metal(0x6b7781),3.2,0.2+fi*0.2,0);
+  add('pump',new THREE.CylinderGeometry(0.1,0.1,3.1,12),metal(0xb7c3c9),1.55,0.35,0,0,Math.PI/2);
+  add('pump',new THREE.CylinderGeometry(0.1,0.1,0.4,12),metal(0xb7c3c9),0,0.5,0);
+  R.renderer=renderer;R.camera=camera;R.scene=scene;R.ok=true;
+  // orbit
+  var th=0.7,ph=1.2,rad=8.8,tgt=new THREE.Vector3(0,1.5,0);
+  function place(){camera.position.set(tgt.x+rad*Math.sin(ph)*Math.sin(th),tgt.y+rad*Math.cos(ph),tgt.z+rad*Math.sin(ph)*Math.cos(th));camera.lookAt(tgt);}
+  function resize(){var w=wrap.clientWidth,h=wrap.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  place();resize();
+  if(window.ResizeObserver)new ResizeObserver(resize).observe(wrap);else window.addEventListener('resize',resize);
+  var down=null,moved=0,ray=new THREE.Raycaster(),el=renderer.domElement,pts={},pinch=0;
+  el.addEventListener('pointerdown',function(e){el.setPointerCapture(e.pointerId);pts[e.pointerId]={x:e.clientX,y:e.clientY};down={x:e.clientX,y:e.clientY};moved=0;});
+  el.addEventListener('pointermove',function(e){
+    var p=pts[e.pointerId];if(!p)return;var ids=Object.keys(pts);
+    if(ids.length===2){var o=pts[ids[0]===String(e.pointerId)?ids[1]:ids[0]];var nd=Math.hypot(e.clientX-o.x,e.clientY-o.y);if(pinch){rad=clamp(rad*pinch/nd,5,16);place();}pinch=nd;p.x=e.clientX;p.y=e.clientY;return;}
+    var dx=e.clientX-p.x,dy=e.clientY-p.y;moved+=Math.abs(dx)+Math.abs(dy);p.x=e.clientX;p.y=e.clientY;
+    th-=dx*0.007;ph=clamp(ph-dy*0.007,0.25,1.55);place();
+  });
+  function up(e){delete pts[e.pointerId];pinch=0;
+    if(down&&moved<6&&Object.keys(pts).length===0){
+      var r=el.getBoundingClientRect();ray.setFromCamera({x:((e.clientX-r.left)/r.width)*2-1,y:-((e.clientY-r.top)/r.height)*2+1},camera);
+      var hit=ray.intersectObjects(scene.children,true);
+      for(var i=0;i<hit.length;i++){var o=hit[i].object;while(o&&!o.userData.part)o=o.parent;if(o){select(o.userData.part);break;}}
+    }
+    down=null;}
+  el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+  el.addEventListener('wheel',function(e){e.preventDefault();rad=clamp(rad+e.deltaY*0.008,5,16);place();},{passive:false});
+  (function loop(){
+    requestAnimationFrame(loop);
+    var f=S.RFf/RFSP;R.plasma.material.opacity=f*0.55*(0.9+0.1*Math.sin(S.t*1.7+performance.now()/90));
+    R.plasma.material.color.setHex(S.mm>0.1?0xff6fa8:0xa98bff);
+    var pulse=0.5+0.5*Math.sin(performance.now()/260);
+    Object.keys(R.meshes).forEach(function(id){
+      var sev=partSeverity(id),col=0x000000,k=0;
+      if(sev==='crit'){col=0xff2a2a;k=0.25+0.55*pulse;}else if(sev==='warn'){col=0xf2b84b;k=0.2+0.3*pulse;}
+      else if(id===selected){col=0x63d4e4;k=0.22;}
+      R.meshes[id].forEach(function(me){me.material.emissive.setHex(col);me.material.emissiveIntensity=k;});
+    });
+    renderer.render(scene,camera);
+  })();
+}
+
+/* ---------- UI: parts, info, tiles ---------- */
+function buildParts(){
+  var box=$('#parts');box.innerHTML='';
+  Object.keys(PARTS).forEach(function(id){
+    var b=document.createElement('button');b.type='button';b.className='part';b.dataset.id=id;
+    b.innerHTML='<span class="d"></span>'+PARTS[id].name;
+    b.addEventListener('click',function(){select(id);});box.appendChild(b);
+  });
+}
+function select(id){selected=id;renderInfo();}
+function renderInfo(){
+  var p=PARTS[selected];
+  $$('#parts .part').forEach(function(b){
+    b.setAttribute('aria-pressed',b.dataset.id===selected?'true':'false');
+    var sev=partSeverity(b.dataset.id),d=$('.d',b);d.className='d'+(sev?' '+sev:'');
+  });
+  $('#info').innerHTML='<div class="label">Selected part</div><h3>'+p.name+'</h3><p>'+p.role+'</p><p><span class="label">Watch</span> '+p.watch+'</p><div class="sig" id="sig">'+p.sig()+'</div>';
+}
+var TILES=[
+  {id:'p',label:'Chamber pressure',part:'chamber'},
+  {id:'f',label:'Gas flow',part:'gas'},
+  {id:'rf',label:'RF fwd / refl',part:'rf'},
+  {id:'t',label:'Chuck temperature',part:'stage'},
+  {id:'v',label:'Throttle valve',part:'valve'},
+  {id:'l',label:'Last leak test',part:'chamber'}
+];
+function buildTiles(){
+  $('#tiles').innerHTML=TILES.map(function(t){return '<div class="tile"><div class="label"><span class="dot" id="dot-'+t.id+'"></span>'+t.label+'</div><div class="v" id="v-'+t.id+'"></div><div class="s" id="s-'+t.id+'"></div></div>';}).join('');
+}
+function updateTiles(){
+  var p=fmtP(S.Pm);
+  $('#v-p').innerHTML=p.v+'<small>'+p.u+'</small>';$('#s-p').textContent='setpoint '+PSP+' mTorr';
+  $('#v-f').innerHTML=S.Frep.toFixed(1)+'<small>sccm</small>';$('#s-f').textContent='setpoint '+FSP+' sccm';
+  $('#v-rf').innerHTML=S.RFf.toFixed(0)+' / '+(S.RFf*S.mm).toFixed(0)+'<small>W</small>';$('#s-rf').textContent='reflected '+(S.RFf>50?(S.mm*100).toFixed(1):'0.0')+'%';
+  $('#v-t').innerHTML=S.T.toFixed(1)+'<small>°C</small>';$('#s-t').textContent='process target 60 °C';
+  $('#v-v').innerHTML=(S.v*100).toFixed(1)+'<small>%</small>';$('#s-v').textContent=S.stuck?'not responding':'open';
+  if(S.lastLeak){$('#v-l').innerHTML=S.lastLeak.rate.toFixed(1)+'<small>mTorr/min</small>';$('#s-l').textContent=(S.lastLeak.pass?'PASS':'FAIL')+' · limit 5';}
+  else{$('#v-l').innerHTML='–';$('#s-l').textContent='not run yet';}
+  TILES.forEach(function(t){var sev=partSeverity(t.part);if(t.id==='l')sev=S.lastLeak&&!S.lastLeak.pass?'crit':null;$('#dot-'+t.id).className='dot'+(sev?' '+sev:'');});
+  var st=$('#state');st.innerHTML='State <b>'+S.mode+(lockout()?' · LOCKED OUT':'')+'</b>';
+  var s=$('#sig');if(s)s.textContent=PARTS[selected].sig();
+}
+function updateControls(){
+  var m=S.mode;
+  $('#bPump').disabled=m!=='IDLE';
+  $('#bStart').disabled=!(m==='BASE')||lockout();
+  $('#bStop').disabled=m!=='PROCESS';
+  $('#bLeak').disabled=!((m==='BASE'||m==='PUMPDOWN')&&S.P<500);
+  $('#bVent').disabled=!(m==='BASE'||m==='PUMPDOWN');
+  $$('[data-fault]').forEach(function(b){var on=S.faults[b.dataset.fault];b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false');});
+  $('#note').textContent=S.note;
+  var n=openAlerts().length,an=$('#alertN');an.hidden=!n;an.textContent=n;
+}
+
+/* ---------- charts ---------- */
+function chart(cv,o){
+  var dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  var g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  var L=54,Rm=12,T=12,B=26,pw=w-L-Rm,ph=h-T-B,i,j,all=[];
+  o.series.forEach(function(s){s.data.forEach(function(v){all.push(v);});});
+  (o.refs||[]).forEach(function(r){all.push(r.y);});
+  var lo,hi,tr=function(v){return v;};
+  if(o.log){tr=function(v){return Math.log10(Math.max(v,0.1));};lo=Math.floor(tr(Math.min.apply(null,all.concat([1]))));hi=Math.ceil(tr(Math.max.apply(null,all.concat([10]))));if(hi===lo)hi++;}
+  else{lo=o.min!=null?o.min:Math.min.apply(null,all);hi=o.max!=null?o.max:Math.max.apply(null,all);if(!isFinite(lo)){lo=0;hi=1;}if(hi-lo<1e-6){hi=lo+1;}var pd=(hi-lo)*0.08;if(o.min==null)lo-=pd;if(o.max==null)hi+=pd;}
+  var Y=function(v){return T+ph*(1-(tr(v)-lo)/(hi-lo));};
+  g.font='11px JetBrains Mono, monospace';g.textBaseline='middle';
+  var ticks=[];
+  if(o.log){for(i=lo;i<=hi;i++)ticks.push(i);}else{for(i=0;i<=4;i++)ticks.push(lo+(hi-lo)*i/4);}
+  ticks.forEach(function(tv){var y=o.log?T+ph*(1-(tv-lo)/(hi-lo)):Y(tv);g.strokeStyle=C.line;g.lineWidth=1;g.beginPath();g.moveTo(L,y);g.lineTo(w-Rm,y);g.stroke();
+    g.fillStyle=C.dim;g.textAlign='right';var lab=o.log?(tv>=0?Math.pow(10,tv):0).toExponential(0).replace('e+','e'):(Math.abs(tv)>=100?tv.toFixed(0):tv.toFixed(o.dec!=null?o.dec:1));g.fillText(lab,L-8,y);});
+  g.textAlign='center';g.fillStyle=C.dim;g.textBaseline='top';
+  g.fillText(o.n+' s ago',L+16,h-B+8);g.fillText('now',w-Rm-12,h-B+8);
+  var X=function(idx,len){return L+pw*((o.n-len+idx)/(o.n-1));};
+  (o.refs||[]).forEach(function(r){var y=Y(r.y);g.strokeStyle=r.color;g.lineWidth=1;g.setLineDash(r.dash||[5,4]);g.beginPath();g.moveTo(L,y);g.lineTo(w-Rm,y);g.stroke();g.setLineDash([]);
+    if(r.label){g.fillStyle=r.color;g.textAlign='right';g.textBaseline='bottom';g.fillText(r.label,w-Rm-4,y-2);}});
+  o.series.forEach(function(s){
+    var d=s.data,len=d.length;if(len<2)return;
+    var gr=g.createLinearGradient(0,T,0,T+ph);gr.addColorStop(0,s.color+'33');gr.addColorStop(1,s.color+'00');
+    if(o.fill){g.beginPath();for(j=0;j<len;j++){var x=X(j,len),y=Y(d[j]);if(j)g.lineTo(x,y);else g.moveTo(x,y);}g.lineTo(X(len-1,len),T+ph);g.lineTo(X(0,len),T+ph);g.closePath();g.fillStyle=gr;g.fill();}
+    g.strokeStyle=s.color;g.lineWidth=1.8;g.lineJoin='round';g.beginPath();
+    for(j=0;j<len;j++){var x2=X(j,len),y2=Y(d[j]);if(j)g.lineTo(x2,y2);else g.moveTo(x2,y2);}g.stroke();
+    if(o.mark){for(j=0;j<len;j++){var mc=o.mark(j,d[j]);if(mc){g.fillStyle=mc;g.beginPath();g.arc(X(j,len),Y(d[j]),3.5,0,7);g.fill();}}}
+    g.fillStyle=s.color;g.beginPath();g.arc(X(len-1,len),Y(d[len-1]),3.5,0,7);g.fill();
+  });
+  if(!o.series.length||o.series[0].data.length<2){g.fillStyle=C.dim;g.textAlign='center';g.textBaseline='middle';g.font='13px Barlow, sans-serif';g.fillText(o.empty||'No data yet',L+pw/2,T+ph/2);}
+}
+
+/* ---------- tabs ---------- */
+var tab='trends',metric='P',lastSig='';
+var METRICS={
+  P:{label:'Pressure',build:function(){return {log:true,n:180,fill:true,series:[{data:S.hist.map(function(r){return r.P;}),color:C.accent}],refs:[{y:PSP,color:C.dim,label:'setpoint 20 mTorr'}]};},legend:[['Chamber pressure (log scale, mTorr)',C.accent]]},
+  F:{label:'Gas flow',build:function(){return {min:0,n:180,fill:true,dec:0,series:[{data:S.hist.map(function(r){return r.F;}),color:C.accent}],refs:[{y:FSP,color:C.dim,label:'setpoint 50 sccm'}]};},legend:[['MFC reading (sccm)',C.accent]]},
+  R:{label:'RF power',build:function(){return {min:0,n:180,dec:0,series:[{data:S.hist.map(function(r){return r.Rf;}),color:C.plasma},{data:S.hist.map(function(r){return r.Rr;}),color:C.crit}]};},legend:[['Forward (W)',C.plasma],['Reflected (W)',C.crit]]},
+  T:{label:'Chuck temperature',build:function(){return {n:180,fill:true,series:[{data:S.hist.map(function(r){return r.T;}),color:C.warn}],refs:[{y:60,color:C.dim,label:'target 60 °C'}]};},legend:[['Chuck temperature (°C)',C.warn]]},
+  V:{label:'Throttle valve',build:function(){return {min:0,max:100,n:180,dec:0,series:[{data:S.hist.map(function(r){return r.v;}),color:C.accent}],refs:[{y:95,color:C.crit,label:'open limit'}]};},legend:[['Valve position (%)',C.accent]]}
+};
+function renderPane(){
+  var pane=$('#pane');
+  if(tab==='trends'){
+    pane.innerHTML='<div class="metrics" id="mt">'+Object.keys(METRICS).map(function(k){return '<button type="button" class="part" data-m="'+k+'" aria-pressed="'+(k===metric)+'">'+METRICS[k].label+'</button>';}).join('')+'</div><canvas class="ch" id="cv" role="img" aria-label="Trend chart"></canvas><div class="legend" id="lg"></div>';
+    $$('[data-m]').forEach(function(b){b.addEventListener('click',function(){metric=b.dataset.m;renderPane();});});
+    $('#lg').innerHTML=METRICS[metric].legend.map(function(l){return '<span><i style="background:'+l[1]+'"></i>'+l[0]+'</span>';}).join('');
+  }else if(tab==='spc'){
+    pane.innerHTML='<div class="spcstats" id="ss"></div><canvas class="ch" id="cv" role="img" aria-label="SPC control chart of chamber pressure"></canvas><div class="legend"><span><i style="background:'+C.accent+'"></i>Pressure sample (mTorr)</span><span><i style="background:'+C.crit+'"></i>Control limits ±3σ</span><span><i style="background:'+C.dim+'"></i>Spec limits 18 to 22 mTorr</span></div><p class="foot" style="margin-top:10px">Rules: any point beyond 3σ, or 8 points in a row more than 0.5σ on the same side of the centre line. Limits come from a qualified baseline (centre 20 mTorr, σ 0.4 mTorr). Samples are taken once the process has settled.</p>';
+  }else if(tab==='alerts'){
+    if(!S.alerts.length){pane.innerHTML='<div class="empty">No tickets. Start a process, then inject a fault from the controls to see detection and escalation.</div>';}
+    else pane.innerHTML='<div class="tickets">'+S.alerts.map(function(a){return '<article class="tk'+(a.open?'':' closed')+'"><div class="h"><span class="pill '+a.sev+'">'+(a.sev==='crit'?'Critical':'Warning')+'</span><b class="t">'+a.title+'</b><span class="label">'+a.id+' · '+a.time+' · '+(a.open?'Escalated, open':'Resolved '+a.closed)+'</span></div>'+(a.detail?'<p><span>Evidence:</span> '+a.detail+'</p>':'')+'<p><span>Likely cause:</span> '+a.cause+'</p><p><span>Required action:</span> '+a.action+'</p></article>';}).join('')+'</div>';
+  }else if(tab==='pm'){renderPM();}
+  drawActive();
+}
+function drawActive(){
+  var cv=$('#cv');if(!cv)return;
+  if(tab==='trends')chart(cv,METRICS[metric].build());
+  if(tab==='spc'){
+    var q=cpk(),ss=$('#ss');
+    ss.innerHTML=q?'<span>Mean <b>'+q.mu.toFixed(2)+'</b> mTorr</span><span>σ <b>'+q.s.toFixed(2)+'</b></span><span>Cpk <b style="color:'+(q.cpk>=1.33?C.ok:q.cpk>=1?C.warn:C.crit)+'">'+q.cpk.toFixed(2)+'</b> <span style="color:var(--dim)">(target ≥ 1.33)</span></span><span>Samples <b>'+S.spc.length+'</b></span>':'<span style="color:var(--dim)">Cpk appears after 10 settled process samples. Start a process.</span>';
+    chart(cv,{n:60,min:16,max:24,fill:false,series:[{data:S.spc,color:C.accent}],
+      refs:[{y:CL,color:C.dim,dash:[],label:'CL'},{y:CL+3*SIG,color:C.crit,label:'UCL'},{y:CL-3*SIG,color:C.crit,label:'LCL'},{y:USL,color:C.dim,dash:[2,4],label:'USL'},{y:LSL,color:C.dim,dash:[2,4],label:'LSL'}],
+      mark:function(i,v){return Math.abs(v-CL)>3*SIG?C.crit:null;},empty:'Start a process to collect SPC samples.'});
+  }
+}
+
+/* ---------- PM mode ---------- */
+var PM=[
+  {t:'Notify supervisor and apply lockout/tagout',d:'Lock and tag the RF, process gas and pump isolators.',confirm:'I applied my personal lock and tag to every isolator.'},
+  {t:'Verify zero energy',d:'Try to start the tool. RF, gas and pump must not start.',confirm:'RF, gas and pump did not start. Zero energy verified.'},
+  {t:'Vent the chamber to atmosphere',d:'Use the Vent button in tool controls and wait for atmospheric pressure.',cond:function(){return S.P>700000?null:'Waiting: chamber must be vented (above 700 Torr). Press Vent.';}},
+  {t:'Put on ESD strap and cleanroom gloves',d:'Ground yourself before touching internal parts.',confirm:'ESD strap checked and gloves on.'},
+  {t:'Replace the door seal',d:'Inspect sealing surfaces and fit a new O-ring.',confirm:'New seal fitted and sealing surface clean.',done:function(){if(S.faults.leak){S.faults.leak=false;logEvent('Door seal replaced: leak source removed');}}},
+  {t:'Wipe down the chamber',d:'Clean the walls and chuck with lint-free wipes and IPA.',confirm:'Chamber wiped and free of residue.'},
+  {t:'Close chamber and pump down',d:'Close the door, then press Pump down in tool controls.',cond:function(){return S.P<50&&(S.mode==='BASE')?null:'Waiting: chamber must reach base pressure (below 50 mTorr). Press Pump down.';}},
+  {t:'Leak rise test must pass',d:'Run the leak rise test from tool controls. Limit is 5 mTorr/min.',cond:function(){return S.lastLeak&&S.lastLeak.pass&&S.lastLeak.t>S.pm.start?null:'Waiting: a passing leak rise test after PM start. Press Leak rise test.';}},
+  {t:'Remove lockout and return the tool to production',d:'Remove your lock and tag and sign off the PM.',confirm:'Lock and tag removed. PM signed off.',done:function(){S.pm.done=true;logEvent('PM complete. Tool returned to production.');}}
+];
+function pmSig(){var s=[S.pm.active,S.pm.step,S.pm.done];if(S.pm.active&&S.pm.step<PM.length&&PM[S.pm.step].cond)s.push(PM[S.pm.step].cond()===null);return s.join('|');}
+function renderPM(){
+  var pane=$('#pane'),p=S.pm,html='<div class="pmgrid"><div>';
+  if(!p.active||p.done){
+    html+='<p style="margin-top:0;max-width:60ch;color:var(--dim)">'+(p.done?'Last PM is complete. ':'')+'Starting PM stops the process, turns off RF and locks the tool out of production. Each step unlocks only after the one before it, so lockout/tagout cannot be skipped.</p><button class="btn primary" id="pmStart" type="button">Start PM</button>';
+  }else{
+    html+='<ol class="steps">'+PM.map(function(s,i){
+      var st=i<p.step?'done':(i===p.step?'cur':'locked'),w=(st==='cur'&&s.cond)?s.cond():null;
+      var body='<div class="hd"><span class="no">'+(i<p.step?'DONE':'STEP '+(i+1))+'</span><span class="tt">'+s.t+'</span></div><p>'+s.d+'</p>';
+      if(st==='cur'){
+        if(s.confirm)body+='<label><input type="checkbox" id="chk'+i+'"'+(p.chk[i]?' checked':'')+'> '+s.confirm+'</label>';
+        if(w)body+='<div class="wait">'+w+'</div>';
+        body+='<div><button class="btn primary" type="button" data-done="'+i+'"'+((w||(s.confirm&&!p.chk[i]))?' disabled':'')+'>Mark step done</button></div>';
+      }
+      return '<li class="step '+st+'">'+body+'</li>';}).join('')+'</ol>';
+  }
+  html+='</div><div><div class="label" style="margin-bottom:8px">Audit log (timestamped)</div><div class="audit" id="audit"></div></div></div>';
+  pane.innerHTML=html;
+  var au=$('#audit');au.innerHTML=S.log.length?S.log.map(function(l){return '<div><time>'+l.time+'</time><span>'+l.text+'</span></div>';}).join(''):'<div><time></time><span>No events yet.</span></div>';
+  var ps=$('#pmStart');if(ps)ps.addEventListener('click',function(){
+    S.pm={active:true,step:0,chk:{},start:S.t,done:false};
+    if(S.mode==='PROCESS'){setMode('BASE');}
+    logEvent('PM started. Tool locked out, RF disabled.');renderPane();
+  });
+  $$('[data-done]').forEach(function(b){b.addEventListener('click',function(){
+    var i=+b.dataset.done;logEvent('PM step '+(i+1)+' done: '+PM[i].t);
+    if(PM[i].done)PM[i].done();p.step++;lastSig='';renderPane();});});
+  PM.forEach(function(s,i){var c=$('#chk'+i);if(c)c.addEventListener('change',function(){p.chk[i]=c.checked;renderPane();});});
+  lastSig=pmSig();
+}
+
+/* ---------- main loop ---------- */
+var seenVer=-1;
+function refresh(){
+  updateTiles();updateControls();
+  if(S.ver!==seenVer){seenVer=S.ver;renderInfo();if(tab==='alerts'||tab==='pm'){if(!(tab==='pm'&&document.activeElement&&document.activeElement.type==='checkbox'))renderPane();}}
+  else if(tab==='pm'&&pmSig()!==lastSig)renderPane();
+  else drawActive();
+}
+function tick(){if(!S.running)return;step();refresh();}
+
+function boot(){
+  buildParts();buildTiles();renderInfo();
+  // start in a realistic working state: pumped down, process running and settled
+  S.mode='PUMPDOWN';S.modeT=0;for(var i=0;i<75;i++)step();
+  S.mode==='BASE'||(S.mode='BASE');setMode('PROCESS');S.procT=0;S.spc=[];
+  for(var j=0;j<90;j++)step();
+  S.log=[];S.alerts=[];S.tk=0;S.c={pdev:0,mfc:0,rf:0,pump:0};
+  logEvent('Session start: simulated tool running a steady process');
+  $('#bPump').onclick=function(){act('pump');refresh();};
+  $('#bStart').onclick=function(){act('start');refresh();};
+  $('#bStop').onclick=function(){act('stop');refresh();};
+  $('#bLeak').onclick=function(){act('leak');refresh();};
+  $('#bVent').onclick=function(){act('vent');refresh();};
+  $('#bRepair').onclick=function(){repair();refresh();};
+  $$('[data-fault]').forEach(function(b){b.addEventListener('click',function(){inject(b.dataset.fault);refresh();});});
+  $('#pause').onclick=function(){S.running=!S.running;this.textContent=S.running?'Pause':'Resume';};
+  $$('.tab').forEach(function(b){b.addEventListener('click',function(){tab=b.dataset.tab;$$('.tab').forEach(function(x){x.setAttribute('aria-selected',x===b?'true':'false');});renderPane();});});
+  window.addEventListener('resize',drawActive);
+  renderPane();refresh();
+  setInterval(tick,250);
+  init3D();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+
+</body></html>
